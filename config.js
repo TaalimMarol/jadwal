@@ -6,7 +6,7 @@ window.JADWAL_CONFIG = {
 
   /* ---- Titles shown in the app ------------------------------------------ */
   appTitle: "Jadwal",
-  institution: "",                  // optional line under the title, e.g. "Al-Jamea tus-Saifiyah"
+  institution: "Aljamea tus Saifiyah, Marol (Mumbai)",                  // optional line under the title, e.g. "Al-Jamea tus-Saifiyah"
 
   /* ---- Admin login (CHANGE THESE BEFORE YOU PUBLISH) --------------------- */
   admin: {
