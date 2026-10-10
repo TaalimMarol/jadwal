@@ -10,8 +10,8 @@ window.JADWAL_CONFIG = {
 
   /* ---- Admin login (CHANGE THESE BEFORE YOU PUBLISH) --------------------- */
   admin: {
-    itsId: "12345678",
-    password: "change-this-password"
+    itsId: "Manahij",
+    password: "Junnat@5253"
   },
 
   /* ---- Normal users ------------------------------------------------------ */
