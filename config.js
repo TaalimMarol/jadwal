@@ -29,6 +29,15 @@ window.JADWAL_CONFIG = {
   /* ---- Teacher jadwal ---------------------------------------------------- */
   showClassInTeacherView: false,    // true = also print the class name in small type under each book
 
+  /* ---- Department-to-ID mapping for teacher identity --------------------- */
+  departmentMapping: {
+    "department of arts and vocational training": "TFanni",
+    "department of home sciences": "TManzili",
+    "department of physical education": "Khaimat",
+    "faculty of quranic sciences": "Mahad",
+    "لجنة التخصص المعينة": "takhassus"
+  },
+
   /* ---- Publishing to GitHub from inside the app (optional) --------------- */
   /* Leave empty on github.io sites: owner and repo are detected from the address. */
   github: {
@@ -38,10 +47,10 @@ window.JADWAL_CONFIG = {
   },
 
   /* ---- Subject colours ---------------------------------------------------
-     Spelling is forgiving (capitals, accents and apostrophes are ignored).
-     Add "aliases" for other spellings or Arabic script, e.g.
-       { name: "Fiqh", color: "#D5F1CA", aliases: ["فقه"] }                  */
-  fallbackColor: "#E7E9EE",         // used when a subject has no rule below
+      Spelling is forgiving (capitals, accents and apostrophes are ignored).
+      Add "aliases" for other spellings or Arabic script, e.g.
+        { name: "Fiqh", color: "#D5F1CA", aliases: ["فقه"] }                  */
+  fallbackColor: "#FFFFFF",         // used when a subject has no rule below
   subjects: [
     { name: "Adab",                     color: "#F5E0CB" },
     { name: "Al-Lisān al-ʿArabī",       color: "#F2F3F8" },

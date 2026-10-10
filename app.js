@@ -19,6 +19,8 @@
     loadError: '',
     view: null,            // what a normal user is looking at: {kind:'teacher'|'class', key}
     weekKey: null,
+    adminFilter: '',
+    adminSort: 'default',
     lookupText: '', lookupMsg: '', lookupSuggest: [],
     adminTab: 'upload',
     adminView: null,
@@ -195,6 +197,15 @@
       }));
   }
 
+  function sortRows(rows, sortMode) {
+    const out = rows.slice();
+    if (sortMode === 'period') return out.sort((a, b) => (Number(a.period) || 9999) - (Number(b.period) || 9999) || (a.date || '').localeCompare(b.date || ''));
+    if (sortMode === 'date') return out.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (Number(a.period) || 9999) - (Number(b.period) || 9999));
+    if (sortMode === 'class') return out.sort((a, b) => (a.class || '').localeCompare(b.class || '') || (a.date || '').localeCompare(b.date || ''));
+    if (sortMode === 'subject') return out.sort((a, b) => (a.subject || '').localeCompare(b.subject || '') || (a.date || '').localeCompare(b.date || ''));
+    return out;
+  }
+
   function buildSheet(spec, rows, stamp) {
     const sec = h('section', { class: 'jadwal' });
     sec.append(h('h1', { class: 'jadwal-title', dir: 'auto' }, spec.title));
@@ -206,7 +217,13 @@
     sec.append(h('p', { class: 'jadwal-sub' }, core.fmtRange(L.dates[0], L.dates[L.dates.length - 1])));
     const head = h('tr', null,
       h('th', { class: 'corner', scope: 'col' }, 'Day'),
-      L.periods.map((p) => h('th', { class: 'period', scope: 'col' }, h('span', { class: 'p-label' }, 'Period'), h('span', { class: 'p-num' }, String(p)))));
+      L.periods.map((p) => {
+        const timeTag = L.periodTimes && L.periodTimes.get(String(p));
+        return h('th', { class: 'period', scope: 'col' },
+          h('span', { class: 'p-label' }, 'Period'),
+          h('span', { class: 'p-num' }, String(p)),
+          timeTag ? h('span', { class: 'p-time' }, '(' + timeTag + ')') : null);
+      }));
     const body = L.dates.map((d) => h('tr', null,
       h('th', { class: 'day', scope: 'row' }, h('span', { class: 'day-name' }, core.fmtDay(d)), h('span', { class: 'day-date' }, core.fmtDate(d))),
       L.periods.map((p) => slot(L.cell(d, p), spec.mode))));
@@ -222,7 +239,14 @@
     const weeks = idx.weeks;
     let weekKey = (state.weekKey === 'all' || weeks.some((w) => w.key === state.weekKey)) ? state.weekKey : core.defaultWeekKey(weeks);
     const holder = h('div', { class: 'sheet-holder' });
-    const draw = () => holder.replaceChildren(buildSheet(spec, core.filterWeek(spec.rows, weekKey), stamp));
+    const draw = () => {
+      const baseRows = core.filterWeek(spec.rows, weekKey);
+      const query = (state.adminFilter || '').trim().toLowerCase();
+      const filteredRows = query
+        ? baseRows.filter((r) => [r.class, r.subject, r.book, r.mufawwaz, r.number].some((v) => String(v || '').toLowerCase().includes(query)))
+        : baseRows;
+      holder.replaceChildren(buildSheet(spec, sortRows(filteredRows, state.adminSort), stamp));
+    };
     const toolbar = h('div', { class: 'toolbar no-print' });
     if (weeks.length) {
       const sel = h('select', { id: 'week-sel', onchange: (e) => { weekKey = e.target.value; state.weekKey = weekKey; draw(); } },
@@ -231,6 +255,22 @@
       sel.value = weekKey;
       toolbar.append(h('label', { for: 'week-sel' }, 'Week'), sel);
     }
+    const filterInput = h('input', {
+      type: 'text',
+      placeholder: 'Filter by class / teacher / subject',
+      value: state.adminFilter,
+      oninput: (e) => { state.adminFilter = e.target.value; draw(); }
+    });
+    const sortSelect = h('select', {
+      onchange: (e) => { state.adminSort = e.target.value; draw(); }
+    },
+      h('option', { value: 'default' }, 'Default sort'),
+      h('option', { value: 'period' }, 'Sort by period'),
+      h('option', { value: 'date' }, 'Sort by date'),
+      h('option', { value: 'class' }, 'Sort by class'),
+      h('option', { value: 'subject' }, 'Sort by subject'));
+    sortSelect.value = state.adminSort;
+    toolbar.append(filterInput, sortSelect);
     toolbar.append(h('button', { class: 'btn ghost', type: 'button', onclick: () => window.print() }, 'Print or save as PDF'));
     target.append(toolbar, holder);
     draw();
@@ -405,7 +445,7 @@
     wrap.append(
       h('section', { class: 'step' },
         h('h2', null, '1. Add the timetable'),
-        h('p', { class: 'hint' }, 'Columns: Period, Class, Subject, Book, Mufawwaz/Department, Number, Date and an optional Time. Number is the teacher’s ITS ID. Dates must be Gregorian. A header row is recommended. Adding data replaces the current draft.'),
+        h('p', { class: 'hint' }, 'Columns: Period, Class, Subject, Book, Mufawwaz/Department, Number, Date and an optional Time. The teacher ITS ID is now generated from the department or Mufawwaz value, while the mobile number is preserved in the data for admin review and sorting.'),
         drop,
         h('label', { class: 'plain-label', for: 'paste' }, 'Or paste rows copied from Excel'),
         paste,
@@ -443,7 +483,7 @@
     wrap.append(
       h('section', { class: 'step' },
         h('h2', null, '2. Publish for everyone'),
-        !hasDraft ? h('p', { class: 'hint' }, 'Add a timetable in step 1 first.') : h('p', { class: 'hint' }, 'The draft has ' + state.draft.rows.length + ' rows. Publishing replaces the timetable that users see.'),
+        !hasDraft ? h('p', { class: 'hint' }, 'Add a timetable in step 1 first.') : h('p', { class: 'hint' }, 'The draft has ' + state.draft.rows.length + ' rows. Publishing replaces the timetable on the site. Admins can filter and sort before publishing from the preview tab.'),
         h('div', { class: 'gh-grid' },
           h('div', { class: 'field' }, h('label', { for: 'gh-owner' }, 'GitHub owner'), owner),
           h('div', { class: 'field' }, h('label', { for: 'gh-repo' }, 'Repository'), repoIn),
