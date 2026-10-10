@@ -17,10 +17,8 @@
     draft: null,
     session: null,
     loadError: '',
-    view: null,
+    view: null,            // what a normal user is looking at: {kind:'teacher'|'class', key}
     weekKey: null,
-    adminFilter: '',
-    adminSort: 'default',
     lookupText: '', lookupMsg: '', lookupSuggest: [],
     adminTab: 'upload',
     adminView: null,
@@ -64,7 +62,6 @@
     try { return new Date(iso).toLocaleString(CFG.locale, { dateStyle: 'medium', timeStyle: 'short' }); }
     catch (e) { return iso; }
   }
-  function clean(v) { return v == null ? '' : String(v).replace(/\s+/g, ' ').trim(); }
   const notice = (level, text) => h('p', { class: 'notice ' + level, role: level === 'error' ? 'alert' : 'status' }, text);
   const emptyState = (title, text) => h('div', { class: 'empty' }, h('h2', null, title), h('p', null, text));
 
@@ -108,14 +105,14 @@
      LOGIN
      ====================================================================== */
   function loginScreen() {
-    const adminId = clean(CFG.admin.itsId).toLowerCase();
+    const adminId = core.digits(CFG.admin.itsId);
     const err = h('p', { class: 'form-error', role: 'alert' });
-    const its = h('input', { id: 'its', type: 'text', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off' });
+    const its = h('input', { id: 'its', type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false' });
     const pwd = h('input', { id: 'pwd', type: 'password', autocomplete: 'current-password' });
     const pwdField = h('div', { class: 'field', hidden: true }, h('label', { for: 'pwd' }, 'Admin password'), pwd);
 
     its.addEventListener('input', () => {
-      if (!pwdField.hidden && clean(its.value).toLowerCase() !== adminId) { pwdField.hidden = true; pwd.value = ''; }
+      if (!pwdField.hidden && core.digits(its.value) !== adminId) { pwdField.hidden = true; pwd.value = ''; }
     });
     const fail = (msg, el) => { err.textContent = msg; (el || its).focus(); };
 
@@ -123,23 +120,15 @@
       class: 'login', novalidate: true,
       onsubmit: (e) => {
         e.preventDefault(); err.textContent = '';
-        const raw = clean(its.value);
-        if (!raw) return fail('Enter your ITS ID.');
-        if (adminId && raw.toLowerCase() === adminId) {
+        const id = core.digits(its.value);
+        if (!id) return fail('Enter your ITS ID.');
+        if (adminId && id === adminId) {
           if (pwdField.hidden) { pwdField.hidden = false; pwd.focus(); return; }
-          if (pwd.value === CFG.admin.password) return signIn({ role: 'admin', its: raw });
+          if (pwd.value === CFG.admin.password) return signIn({ role: 'admin', its: id });
           return fail('That password is not correct.', pwd);
         }
-        /* Numeric IDs are used as typed; text IDs (departments such as Mahad, TManzili) match ignoring capitals. */
-        const idx = indexOf(state.published);
-        let id = raw;
-        if (!/^\d+$/.test(raw)) {
-          const hit = Array.from(idx.teachers.keys()).find((k) => k.toLowerCase() === raw.toLowerCase());
-          if (hit) id = hit;
-        } else if (CFG.itsIdLength && raw.length !== CFG.itsIdLength && raw.length !== 4) {
-          return fail('An ITS ID has ' + CFG.itsIdLength + ' digits.');
-        }
-        if (CFG.allowOnlyKnownIds && !idx.teachers.has(id)) return fail('This ITS ID is not in the published jadwal.');
+        if (CFG.itsIdLength && id.length !== CFG.itsIdLength) return fail('An ITS ID has ' + CFG.itsIdLength + ' digits.');
+        if (CFG.allowOnlyKnownIds && !indexOf(state.published).teachers.has(id)) return fail('This ITS ID is not in the published jadwal.');
         signIn({ role: 'user', its: id });
       }
     },
@@ -180,6 +169,7 @@
     entries.forEach((e) => {
       const box = h('div', { class: 'entry' });
       box.style.background = core.subjectColor(e.subject);
+      if (e.time) box.append(h('span', { class: 'e-time' }, e.time));
       box.append(h('div', { class: 'e-book', dir: 'auto' }, e.book || e.subject || '—'));
       if (mode === 'class') { if (e.mufawwaz) box.append(h('div', { class: 'e-meta', dir: 'auto' }, e.mufawwaz)); }
       else if (CFG.showClassInTeacherView && e.class) box.append(h('div', { class: 'e-meta', dir: 'auto' }, e.class));
@@ -205,16 +195,6 @@
       }));
   }
 
-  function sortRows(rows, sortMode) {
-    const out = rows.slice();
-    const pn = (r) => (typeof r.period === 'number' ? r.period : 9999);
-    if (sortMode === 'period') return out.sort((a, b) => pn(a) - pn(b) || (a.date || '').localeCompare(b.date || ''));
-    if (sortMode === 'date') return out.sort((a, b) => (a.date || '').localeCompare(b.date || '') || pn(a) - pn(b));
-    if (sortMode === 'class') return out.sort((a, b) => (a.class || '').localeCompare(b.class || '') || (a.date || '').localeCompare(b.date || ''));
-    if (sortMode === 'subject') return out.sort((a, b) => (a.subject || '').localeCompare(b.subject || '') || (a.date || '').localeCompare(b.date || ''));
-    return out;
-  }
-
   function buildSheet(spec, rows, stamp) {
     const sec = h('section', { class: 'jadwal' });
     sec.append(h('h1', { class: 'jadwal-title', dir: 'auto' }, spec.title));
@@ -224,15 +204,9 @@
     }
     const L = core.layout(rows, spec.mode);
     sec.append(h('p', { class: 'jadwal-sub' }, core.fmtRange(L.dates[0], L.dates[L.dates.length - 1])));
-    /* Period label with its time in brackets straight after the number, e.g. "Period 3 (08:45-09:15)". */
     const head = h('tr', null,
       h('th', { class: 'corner', scope: 'col' }, 'Day'),
-      L.periods.map((p) => {
-        const t = L.periodTimes && L.periodTimes.get(String(p));
-        return h('th', { class: 'period', scope: 'col' },
-          h('span', { class: 'p-line' }, 'Period ', String(p)),
-          t ? h('span', { class: 'p-time' }, '(' + t + ')') : null);
-      }));
+      L.periods.map((p) => h('th', { class: 'period', scope: 'col' }, h('span', { class: 'p-label' }, 'Period'), h('span', { class: 'p-num' }, String(p)))));
     const body = L.dates.map((d) => h('tr', null,
       h('th', { class: 'day', scope: 'row' }, h('span', { class: 'day-name' }, core.fmtDay(d)), h('span', { class: 'day-date' }, core.fmtDate(d))),
       L.periods.map((p) => slot(L.cell(d, p), spec.mode))));
@@ -242,20 +216,13 @@
     return sec;
   }
 
-  function showJadwal(target, idx, view, stamp, isAdmin) {
+  function showJadwal(target, idx, view, stamp) {
     const spec = resolve(idx, view);
     if (!spec) { target.append(emptyState('Nothing to show', 'This jadwal is not in the data any more.')); return; }
     const weeks = idx.weeks;
     let weekKey = (state.weekKey === 'all' || weeks.some((w) => w.key === state.weekKey)) ? state.weekKey : core.defaultWeekKey(weeks);
     const holder = h('div', { class: 'sheet-holder' });
-    const draw = () => {
-      const baseRows = core.filterWeek(spec.rows, weekKey);
-      const query = isAdmin ? (state.adminFilter || '').trim().toLowerCase() : '';
-      const filtered = query
-        ? baseRows.filter((r) => [r.class, r.subject, r.book, r.mufawwaz, r.number, r.mobile].some((v) => String(v || '').toLowerCase().includes(query)))
-        : baseRows;
-      holder.replaceChildren(buildSheet(spec, isAdmin ? sortRows(filtered, state.adminSort) : filtered, stamp));
-    };
+    const draw = () => holder.replaceChildren(buildSheet(spec, core.filterWeek(spec.rows, weekKey), stamp));
     const toolbar = h('div', { class: 'toolbar no-print' });
     if (weeks.length) {
       const sel = h('select', { id: 'week-sel', onchange: (e) => { weekKey = e.target.value; state.weekKey = weekKey; draw(); } },
@@ -263,20 +230,6 @@
         h('option', { value: 'all' }, 'All dates'));
       sel.value = weekKey;
       toolbar.append(h('label', { for: 'week-sel' }, 'Week'), sel);
-    }
-    if (isAdmin) {
-      const filterInput = h('input', {
-        type: 'text', placeholder: 'Filter by class, teacher, subject…', value: state.adminFilter,
-        oninput: (e) => { state.adminFilter = e.target.value; draw(); }
-      });
-      const sortSelect = h('select', { onchange: (e) => { state.adminSort = e.target.value; draw(); } },
-        h('option', { value: 'default' }, 'Default order'),
-        h('option', { value: 'period' }, 'Sort by period'),
-        h('option', { value: 'date' }, 'Sort by date'),
-        h('option', { value: 'class' }, 'Sort by class'),
-        h('option', { value: 'subject' }, 'Sort by subject'));
-      sortSelect.value = state.adminSort;
-      toolbar.append(filterInput, sortSelect);
     }
     toolbar.append(h('button', { class: 'btn ghost', type: 'button', onclick: () => window.print() }, 'Print or save as PDF'));
     target.append(toolbar, holder);
@@ -302,7 +255,7 @@
         const c = idx.classes.get(core.norm(q));
         if (c) return open(c.key);
         const qk = core.norm(q);
-        state.lookupMsg = 'No class named \u201c' + q + '\u201d was found.';
+        state.lookupMsg = 'No class named “' + q + '” was found.';
         state.lookupSuggest = qk ? idx.classList.filter((x) => x.key.includes(qk) || qk.includes(x.key)).slice(0, 6) : [];
         render();
       }
@@ -334,8 +287,8 @@
     page.append(lookupBar(idx, me));
     const out = h('div', { class: 'view' });
     page.append(out);
-    if (state.view) showJadwal(out, idx, state.view, 'Published ' + fmtStamp(ds.updatedAt), false);
-    else out.append(emptyState('No teaching jadwal is linked to ITS ' + its, 'Type a class name above to see that class\u2019s jadwal.'));
+    if (state.view) showJadwal(out, idx, state.view, 'Published ' + fmtStamp(ds.updatedAt));
+    else out.append(emptyState('No teaching jadwal is linked to ITS ' + its, 'Type a class name above to see that class’s jadwal.'));
     return page;
   }
 
@@ -393,8 +346,8 @@
     const branch = CFG.github.branch;
     const explain = (res) => {
       if (res.status === 401) return 'GitHub rejected the token. Create a new token and paste it again.';
-      if (res.status === 403) return 'The token is not allowed to change this repository. Give it \u201cContents: Read and write\u201d access to it.';
-      if (res.status === 404) return 'The repository \u201c' + owner + '/' + repo + '\u201d was not found, or the token cannot see it. Check both names and the token\u2019s repository access.';
+      if (res.status === 403) return 'The token is not allowed to change this repository. Give it “Contents: Read and write” access to it.';
+      if (res.status === 404) return 'The repository “' + owner + '/' + repo + '” was not found, or the token cannot see it. Check both names and the token’s repository access.';
       if (res.status === 409 || res.status === 422) return 'GitHub reported a conflict. Press Publish again.';
       return 'GitHub answered with error ' + res.status + '.';
     };
@@ -427,7 +380,7 @@
         : notice('error', 'No timetable was read from ' + r.source + '.'),
       r.ok ? h('dl', { class: 'facts' },
         h('div', null, h('dt', null, 'Classes'), h('dd', null, String(s.classes))),
-        h('div', null, h('dt', null, 'Teachers / departments with an ID'), h('dd', null, String(s.teachers))),
+        h('div', null, h('dt', null, 'Teachers with an ITS ID'), h('dd', null, String(s.teachers))),
         h('div', null, h('dt', null, 'Dates'), h('dd', null, core.fmtRange(s.from, s.to)))) : null,
       r.issues.length ? h('ul', { class: 'issues' }, r.issues.map((i) => h('li', { class: 'issue ' + i.level },
         i.text, i.details ? h('ul', null, i.details.map((d) => h('li', null, d))) : null))) : null);
@@ -436,6 +389,7 @@
   function uploadPanel() {
     const wrap = h('div', { class: 'panel' });
 
+    /* step 1 */
     const input = h('input', { type: 'file', accept: '.xlsx,.xlsm,.xls,.csv,.tsv,.txt', onchange: (e) => { if (e.target.files[0]) readFile(e.target.files[0]); } });
     const drop = h('label', { class: 'drop' }, input,
       h('span', { class: 'drop-main' }, 'Choose an Excel or CSV file'),
@@ -451,7 +405,7 @@
     wrap.append(
       h('section', { class: 'step' },
         h('h2', null, '1. Add the timetable'),
-        h('p', { class: 'hint' }, 'Columns: Period, Class, Subject, Book, Mufawwaz/Department, Number, Date and an optional Time. The ITS ID is taken from the start of the Mufawwaz/Department value (8 or 4 digits), or from the department name (for example Mahad). The Number column is the teacher\u2019s mobile number and is kept as contact data.'),
+        h('p', { class: 'hint' }, 'Columns: Period, Class, Subject, Book, Mufawwaz/Department, Number, Date and an optional Time. Number is the teacher’s ITS ID. Dates must be Gregorian. A header row is recommended. Adding data replaces the current draft.'),
         drop,
         h('label', { class: 'plain-label', for: 'paste' }, 'Or paste rows copied from Excel'),
         paste,
@@ -462,6 +416,7 @@
           } }, 'Read pasted rows')),
         state.parseResult ? resultBlock(state.parseResult) : null));
 
+    /* step 2 */
     const hasDraft = !!state.draft;
     const repo = detectRepo();
     const owner = h('input', { id: 'gh-owner', type: 'text', value: repo.owner, autocomplete: 'off', spellcheck: 'false' });
@@ -474,7 +429,7 @@
       if (!o || !r || !t) return setMsg('error', 'Fill in the owner, the repository and the token.');
       store.set('localStorage', KEYS.gh, JSON.stringify({ owner: o, repo: r }));
       store.set('sessionStorage', KEYS.token, t);
-      pubBtn.disabled = true; setMsg('info', 'Publishing\u2026');
+      pubBtn.disabled = true; setMsg('info', 'Publishing…');
       try {
         await publishToGitHub(o, r, t, state.draft);
         state.published = state.draft;
@@ -488,12 +443,12 @@
     wrap.append(
       h('section', { class: 'step' },
         h('h2', null, '2. Publish for everyone'),
-        !hasDraft ? h('p', { class: 'hint' }, 'Add a timetable in step 1 first.') : h('p', { class: 'hint' }, 'The draft has ' + state.draft.rows.length + ' rows. Check it on the Browse jadwals tab (you can sort and filter there), then publish.'),
+        !hasDraft ? h('p', { class: 'hint' }, 'Add a timetable in step 1 first.') : h('p', { class: 'hint' }, 'The draft has ' + state.draft.rows.length + ' rows. Publishing replaces the timetable that users see.'),
         h('div', { class: 'gh-grid' },
           h('div', { class: 'field' }, h('label', { for: 'gh-owner' }, 'GitHub owner'), owner),
           h('div', { class: 'field' }, h('label', { for: 'gh-repo' }, 'Repository'), repoIn),
           h('div', { class: 'field wide' }, h('label', { for: 'gh-token' }, 'Access token'), token,
-            h('span', { class: 'hint' }, 'Kept only until this tab closes. Create a fine-grained token for this one repository with \u201cContents: Read and write\u201d.'))),
+            h('span', { class: 'hint' }, 'Kept only until this tab closes. Create a fine-grained token for this one repository with “Contents: Read and write”.'))),
         h('div', { class: 'row-actions' }, pubBtn,
           h('button', { class: 'btn', type: 'button', disabled: !hasDraft, onclick: () => downloadJson(state.draft) }, 'Download jadwal.json')),
         msg,
@@ -511,7 +466,7 @@
     const ds = activeDataset(), idx = indexOf(ds);
     if (!ds.rows.length) return emptyState('Nothing to browse yet', 'Add a timetable on the Upload tab first.');
     const holder = h('div', { class: 'view' });
-    const draw = () => { holder.replaceChildren(); if (state.adminView) showJadwal(holder, idx, state.adminView, (hasUnpublishedDraft() ? 'Draft ' : 'Published ') + fmtStamp(ds.updatedAt), true); };
+    const draw = () => { holder.replaceChildren(); if (state.adminView) showJadwal(holder, idx, state.adminView, (hasUnpublishedDraft() ? 'Draft ' : 'Published ') + fmtStamp(ds.updatedAt)); };
     const sel = h('select', { id: 'browse-sel', onchange: (e) => {
       const v = e.target.value, at = v.indexOf('::');
       state.adminView = v ? { kind: v.slice(0, at), key: v.slice(at + 2) } : null;
@@ -572,7 +527,7 @@
   }
 
   async function boot() {
-    app.append(h('p', { class: 'boot' }, 'Loading\u2026'));
+    app.append(h('p', { class: 'boot' }, 'Loading…'));
     await loadPublished();
     state.draft = loadDraft();
     try { const s = JSON.parse(store.get('sessionStorage', KEYS.session) || 'null'); if (s && (s.role === 'admin' || s.role === 'user')) state.session = s; } catch (e) { /* ignore */ }

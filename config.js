@@ -6,12 +6,12 @@ window.JADWAL_CONFIG = {
 
   /* ---- Titles shown in the app ------------------------------------------ */
   appTitle: "Jadwal",
-  institution: "Aljamea tus Saifiyah, Marol (Mumbai)",                  // optional line under the title, e.g. "Al-Jamea tus-Saifiyah"
+  institution: "",                  // optional line under the title, e.g. "Al-Jamea tus-Saifiyah"
 
   /* ---- Admin login (CHANGE THESE BEFORE YOU PUBLISH) --------------------- */
   admin: {
-    itsId: "Manahij",
-    password: "Junnat@5253"
+    itsId: "12345678",
+    password: "change-this-password"
   },
 
   /* ---- Normal users ------------------------------------------------------ */
@@ -27,16 +27,7 @@ window.JADWAL_CONFIG = {
   locale: "en-GB",                  // language used for day and month names
 
   /* ---- Teacher jadwal ---------------------------------------------------- */
-  showClassInTeacherView: false,    // true = also print the class name in small type under each book
-
-  /* ---- Department-to-ID mapping for teacher identity --------------------- */
-  departmentMapping: {
-    "department of arts and vocational training": "TFanni",
-    "department of home sciences": "TManzili",
-    "department of physical education": "Khaimat",
-    "faculty of quranic sciences": "Mahad",
-    "لجنة التخصص المعينة": "takhassus"
-  },
+  showClassInTeacherView: true,     // true = also print the class name in small type under each book
 
   /* ---- Publishing to GitHub from inside the app (optional) --------------- */
   /* Leave empty on github.io sites: owner and repo are detected from the address. */
@@ -47,10 +38,10 @@ window.JADWAL_CONFIG = {
   },
 
   /* ---- Subject colours ---------------------------------------------------
-      Spelling is forgiving (capitals, accents and apostrophes are ignored).
-      Add "aliases" for other spellings or Arabic script, e.g.
-        { name: "Fiqh", color: "#D5F1CA", aliases: ["فقه"] }                  */
-  fallbackColor: "#FFFFFF",         // used when a subject has no rule below
+     Spelling is forgiving (capitals, accents and apostrophes are ignored).
+     Add "aliases" for other spellings or Arabic script, e.g.
+       { name: "Fiqh", color: "#D5F1CA", aliases: ["فقه"] }                  */
+  fallbackColor: "#E7E9EE",         // used when a subject has no rule below
   subjects: [
     { name: "Adab",                     color: "#F5E0CB" },
     { name: "Al-Lisān al-ʿArabī",       color: "#F2F3F8" },

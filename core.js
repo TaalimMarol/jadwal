@@ -10,13 +10,6 @@
 
   var MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   var POSITIONAL = { period: 0, class: 1, subject: 2, book: 3, mufawwaz: 4, number: 5, date: 6, time: 7 };
-  var DEPARTMENT_ID_MAP = {
-    'department of arts and vocational training': 'TFanni',
-    'department of home sciences': 'TManzili',
-    'department of physical education': 'Khaimat',
-    'faculty of quranic sciences': 'Mahad',
-    'لجنة التخصص المعينة': 'takhassus'
-  };
   var DEFAULTS = {
     appTitle: 'Jadwal', institution: '',
     admin: { itsId: '', password: '' },
@@ -25,8 +18,7 @@
     dateOrder: 'DMY', weekStartsOn: 1, locale: 'en-GB',
     showClassInTeacherView: false,
     github: { owner: '', repo: '', branch: '' },
-    fallbackColor: '#FFFFFF', subjects: [],
-    departmentMapping: DEPARTMENT_ID_MAP
+    fallbackColor: '#E7E9EE', subjects: []
   };
 
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -41,33 +33,6 @@
   }
   function clean(v) { return v == null ? '' : String(v).replace(/\s+/g, ' ').trim(); }
   function digits(v) { return v == null ? '' : String(v).replace(/\D/g, ''); }
-  function lookupDepartmentId(rawValue) {
-    var value = clean(rawValue || '');
-    if (!value) return '';
-    var map = DEPARTMENT_ID_MAP;
-    var direct = map[norm(value)];
-    if (direct) return direct;
-    var keys = Object.keys(map).sort(function (a, b) { return b.length - a.length; });
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-      if (norm(value).indexOf(norm(key)) !== -1 || norm(key).indexOf(norm(value)) !== -1) return map[key];
-    }
-    return value;
-  }
-  function teacherIdFromMufawwaz(mufawwaz) {
-    var text = clean(mufawwaz || '');
-    if (!text) return '';
-    if (/\d/.test(text)) {
-      var matches = text.match(/\d+/g);
-      if (matches && matches.length) {
-        var digitsOnly = matches[0].replace(/\D/g, '');
-        if (digitsOnly.length >= 8) return digitsOnly.slice(0, 8);
-        if (digitsOnly.length >= 4) return digitsOnly.slice(0, 4);
-        return digitsOnly;
-      }
-    }
-    return lookupDepartmentId(text);
-  }
 
   var collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   function comparePeriod(a, b) {
@@ -102,9 +67,9 @@
     if (typeof v === 'number') return (v > 20000 && v < 80000) ? serialToIso(v) : null;
     var s = String(v).trim(), m;
     if (/^\d{5}(\.\d+)?$/.test(s)) return serialToIso(parseFloat(s));
-    m = s.match(/(\d{4})[-\/\.](\d{1,2})[-\/\.](\d{1,2})/);
+    m = s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
     if (m) return ymdToIso(+m[1], +m[2], +m[3]);
-    m = s.match(/(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4}|\d{2})(?!\d)/);
+    m = s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?!\d)/);
     if (m) {
       var d = order === 'MDY' ? +m[2] : +m[1], mo = order === 'MDY' ? +m[1] : +m[2];
       if (mo > 12 && d <= 12) { var t = d; d = mo; mo = t; }
@@ -129,8 +94,6 @@
     }
     var s = clean(v);
     if (/^0?\.\d+$/.test(s)) return fracToHM(parseFloat(s));
-    var range = s.match(/(\d{1,2}:\d{2})\s*(?:to|-)\s*(\d{1,2}:\d{2})/i);
-    if (range) return range[1] + '-' + range[2];
     return s;
   }
 
@@ -195,7 +158,6 @@
     var cfg = Object.assign({}, DEFAULTS, userCfg);
     cfg.admin = Object.assign({}, DEFAULTS.admin, userCfg.admin);
     cfg.github = Object.assign({}, DEFAULTS.github, userCfg.github);
-    cfg.departmentMapping = Object.assign({}, DEFAULTS.departmentMapping, userCfg.departmentMapping || {});
 
     var subjectMap = new Map();
     (cfg.subjects || []).forEach(function (s) {
@@ -261,11 +223,9 @@
             if (skipMsgs.length < 12) skipMsgs.push(label + 'Row ' + (i + 1) + ' was skipped: ' + problems.join(', ') + '.');
             continue;
           }
-          var mobile = digits(get('number'));
-          var teachId = teacherIdFromMufawwaz(get('mufawwaz')) || mobile || '';
           var rec = {
             period: per, class: cls, subject: clean(get('subject')), book: clean(get('book')),
-            mufawwaz: clean(get('mufawwaz')), number: teachId, mobile: mobile, date: date, time: parseTime(get('time'))
+            mufawwaz: clean(get('mufawwaz')), number: digits(get('number')), date: date, time: parseTime(get('time'))
           };
           var key = [rec.period, norm(rec.class), rec.date, rec.book, rec.number, rec.mufawwaz, rec.subject, rec.time].join('|');
           if (seen.has(key)) { dupes++; continue; }
@@ -286,10 +246,10 @@
       }
       if (unknown.size) {
         var list = Array.from(unknown.entries()).map(function (e) { return e[0] + ' (' + e[1] + ')'; });
-        issues.push({ level: 'warn', text: 'These subjects have no colour rule and will show in white: ' + list.join(', ') + '. Fix the spelling in the file or add them to config.js.' });
+        issues.push({ level: 'warn', text: 'These subjects have no colour rule and will show in grey: ' + list.join(', ') + '. Fix the spelling in the file or add them to config.js.' });
       }
-      if (noSubject && anySubjectCol) issues.push({ level: 'info', text: noSubject + ' row' + (noSubject > 1 ? 's have' : ' has') + ' no subject and will show in white.' });
-      if (noNumber) issues.push({ level: 'warn', text: noNumber + ' row' + (noNumber > 1 ? 's have' : ' has') + ' no teacher ID. They appear in class jadwals but in no teacher jadwal.' });
+      if (noSubject && anySubjectCol) issues.push({ level: 'info', text: noSubject + ' row' + (noSubject > 1 ? 's have' : ' has') + ' no subject and will show in grey.' });
+      if (noNumber) issues.push({ level: 'warn', text: noNumber + ' row' + (noNumber > 1 ? 's have' : ' has') + ' no Number (ITS ID). They appear in class jadwals but in no teacher jadwal.' });
       if (dupes) issues.push({ level: 'info', text: dupes + ' exact duplicate row' + (dupes > 1 ? 's were' : ' was') + ' ignored.' });
       if (!out.length && !issues.some(function (x) { return x.level === 'error'; })) {
         issues.push({ level: 'error', text: 'No usable rows were found in this data.' });
@@ -312,12 +272,10 @@
       var rows = [];
       src.forEach(function (r) {
         if (!r || !r.class || r.period === '' || r.period == null || !/^\d{4}-\d{2}-\d{2}$/.test(r.date || '')) return;
-        var mobile = digits(r.mobile || r.number);
-        var number = teacherIdFromMufawwaz(r.mufawwaz || '') || mobile || '';
         rows.push({
           period: typeof r.period === 'number' ? r.period : parsePeriod(r.period),
           class: clean(r.class), subject: clean(r.subject), book: clean(r.book),
-          mufawwaz: clean(r.mufawwaz), number: number, mobile: mobile, date: r.date, time: parseTime(r.time || '')
+          mufawwaz: clean(r.mufawwaz), number: digits(r.number), date: r.date, time: clean(r.time)
         });
       });
       return { version: 1, updatedAt: (json && json.updatedAt) || null, rows: rows };
@@ -379,12 +337,7 @@
     function layout(rows, mode) {
       var dates = Array.from(new Set(rows.map(function (r) { return r.date; }))).sort();
       var pmap = new Map();
-      var periodTimes = new Map();
-      rows.forEach(function (r) {
-        var k = String(r.period);
-        if (!pmap.has(k)) pmap.set(k, r.period);
-        if (r.time && !periodTimes.has(k)) periodTimes.set(k, r.time);
-      });
+      rows.forEach(function (r) { var k = String(r.period); if (!pmap.has(k)) pmap.set(k, r.period); });
       var periods = Array.from(pmap.values()).sort(comparePeriod);
       var cells = new Map();
       rows.forEach(function (r) {
@@ -398,7 +351,7 @@
       cells.forEach(function (list) {
         list.sort(function (a, b) { return collator.compare(a.time || '', b.time || '') || collator.compare(a.book, b.book); });
       });
-      return { dates: dates, periods: periods, periodTimes: periodTimes, cell: function (d, p) { return cells.get(d + '|' + p) || []; } };
+      return { dates: dates, periods: periods, cell: function (d, p) { return cells.get(d + '|' + p) || []; } };
     }
 
     return {
@@ -406,8 +359,7 @@
       parseDelimited: parseDelimited, buildDataset: buildDataset, normalizeDataset: normalizeDataset,
       buildIndex: buildIndex, filterWeek: filterWeek, defaultWeekKey: defaultWeekKey, layout: layout,
       fmtDay: fmtDay, fmtDate: fmtDate, fmtRange: fmtRange, serialize: serialize,
-      _parseDate: function (v) { return parseDate(v, cfg.dateOrder); }, _parseTime: parseTime,
-      teacherIdFromMufawwaz: teacherIdFromMufawwaz
+      _parseDate: function (v) { return parseDate(v, cfg.dateOrder); }, _parseTime: parseTime
     };
   }
 
