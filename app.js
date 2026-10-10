@@ -206,7 +206,7 @@
     sec.append(h('p', { class: 'jadwal-sub' }, core.fmtRange(L.dates[0], L.dates[L.dates.length - 1])));
     const head = h('tr', null,
       h('th', { class: 'corner', scope: 'col' }, 'Day'),
-      L.periods.map((p) => h('th', { class: 'period', scope: 'col' }, h('span', { class: 'p-label' }, 'Period'), h('span', { class: 'p-num' }, String(p)))));
+      L.periods.map((p) => h('th', { class: 'period', scope: 'col' }, h('span', { class: 'p-label' }, ''), h('span', { class: 'p-num' }, String(p)))));
     const body = L.dates.map((d) => h('tr', null,
       h('th', { class: 'day', scope: 'row' }, h('span', { class: 'day-name' }, core.fmtDay(d)), h('span', { class: 'day-date' }, core.fmtDate(d))),
       L.periods.map((p) => slot(L.cell(d, p), spec.mode))));
