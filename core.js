@@ -33,6 +33,11 @@
   }
   function clean(v) { return v == null ? '' : String(v).replace(/\s+/g, ' ').trim(); }
   function digits(v) { return v == null ? '' : String(v).replace(/\D/g, ''); }
+  // ITS ID: first 8 digits of a run of 8+ digits, else first 4 digits of a run of 4+, else the whole value.
+  function itsId(v) {
+    var s = clean(v), m = s.match(/\d{8,}/) || s.match(/\d{4,}/);
+    return m ? m[0].slice(0, m[0].length >= 8 ? 8 : 4) : s;
+  }
 
   var collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   function comparePeriod(a, b) {
@@ -225,7 +230,7 @@
           }
           var rec = {
             period: per, class: cls, subject: clean(get('subject')), book: clean(get('book')),
-            mufawwaz: clean(get('mufawwaz')), number: digits(get('number')), date: date, time: parseTime(get('time'))
+            mufawwaz: clean(get('mufawwaz')), number: itsId(get('mufawwaz') || get('number')), date: date, time: parseTime(get('time'))
           };
           var key = [rec.period, norm(rec.class), rec.date, rec.book, rec.number, rec.mufawwaz, rec.subject, rec.time].join('|');
           if (seen.has(key)) { dupes++; continue; }
@@ -275,7 +280,7 @@
         rows.push({
           period: typeof r.period === 'number' ? r.period : parsePeriod(r.period),
           class: clean(r.class), subject: clean(r.subject), book: clean(r.book),
-          mufawwaz: clean(r.mufawwaz), number: digits(r.number), date: r.date, time: clean(r.time)
+          mufawwaz: clean(r.mufawwaz), number: itsId(r.mufawwaz || r.number), date: r.date, time: clean(r.time)
         });
       });
       return { version: 1, updatedAt: (json && json.updatedAt) || null, rows: rows };
@@ -355,7 +360,7 @@
     }
 
     return {
-      cfg: cfg, norm: norm, digits: digits, subjectInfo: subjectInfo, subjectColor: subjectColor,
+      cfg: cfg, norm: norm, digits: digits, itsId: itsId, subjectInfo: subjectInfo, subjectColor: subjectColor,
       parseDelimited: parseDelimited, buildDataset: buildDataset, normalizeDataset: normalizeDataset,
       buildIndex: buildIndex, filterWeek: filterWeek, defaultWeekKey: defaultWeekKey, layout: layout,
       fmtDay: fmtDay, fmtDate: fmtDate, fmtRange: fmtRange, serialize: serialize,

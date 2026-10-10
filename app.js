@@ -105,14 +105,14 @@
      LOGIN
      ====================================================================== */
   function loginScreen() {
-    const adminId = core.digits(CFG.admin.itsId);
+    const adminId = core.itsId(CFG.admin.itsId);
     const err = h('p', { class: 'form-error', role: 'alert' });
-    const its = h('input', { id: 'its', type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false' });
+    const its = h('input', { id: 'its', type: 'text', autocomplete: 'off', spellcheck: 'false' });
     const pwd = h('input', { id: 'pwd', type: 'password', autocomplete: 'current-password' });
     const pwdField = h('div', { class: 'field', hidden: true }, h('label', { for: 'pwd' }, 'Admin password'), pwd);
 
     its.addEventListener('input', () => {
-      if (!pwdField.hidden && core.digits(its.value) !== adminId) { pwdField.hidden = true; pwd.value = ''; }
+      if (!pwdField.hidden && core.itsId(its.value) !== adminId) { pwdField.hidden = true; pwd.value = ''; }
     });
     const fail = (msg, el) => { err.textContent = msg; (el || its).focus(); };
 
@@ -120,14 +120,13 @@
       class: 'login', novalidate: true,
       onsubmit: (e) => {
         e.preventDefault(); err.textContent = '';
-        const id = core.digits(its.value);
+        const id = core.itsId(its.value);
         if (!id) return fail('Enter your ITS ID.');
         if (adminId && id === adminId) {
           if (pwdField.hidden) { pwdField.hidden = false; pwd.focus(); return; }
           if (pwd.value === CFG.admin.password) return signIn({ role: 'admin', its: id });
           return fail('That password is not correct.', pwd);
         }
-        if (CFG.itsIdLength && id.length !== CFG.itsIdLength) return fail('An ITS ID has ' + CFG.itsIdLength + ' digits.');
         if (CFG.allowOnlyKnownIds && !indexOf(state.published).teachers.has(id)) return fail('This ITS ID is not in the published jadwal.');
         signIn({ role: 'user', its: id });
       }
