@@ -107,14 +107,14 @@
      LOGIN
      ====================================================================== */
   function loginScreen() {
-    const adminId = core.digits(CFG.admin.itsId);
+    const adminId = clean(CFG.admin.itsId);
     const err = h('p', { class: 'form-error', role: 'alert' });
-    const its = h('input', { id: 'its', type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false' });
+    const its = h('input', { id: 'its', type: 'text', autocomplete: 'off', spellcheck: 'false' });
     const pwd = h('input', { id: 'pwd', type: 'password', autocomplete: 'current-password' });
     const pwdField = h('div', { class: 'field', hidden: true }, h('label', { for: 'pwd' }, 'Admin password'), pwd);
 
     its.addEventListener('input', () => {
-      if (!pwdField.hidden && core.digits(its.value) !== adminId) { pwdField.hidden = true; pwd.value = ''; }
+      if (!pwdField.hidden && clean(its.value) !== adminId) { pwdField.hidden = true; pwd.value = ''; }
     });
     const fail = (msg, el) => { err.textContent = msg; (el || its).focus(); };
 
@@ -122,14 +122,17 @@
       class: 'login', novalidate: true,
       onsubmit: (e) => {
         e.preventDefault(); err.textContent = '';
-        const id = core.digits(its.value);
+        const id = clean(its.value);
         if (!id) return fail('Enter your ITS ID.');
         if (adminId && id === adminId) {
           if (pwdField.hidden) { pwdField.hidden = false; pwd.focus(); return; }
           if (pwd.value === CFG.admin.password) return signIn({ role: 'admin', its: id });
           return fail('That password is not correct.', pwd);
         }
-        if (CFG.itsIdLength && id.length !== CFG.itsIdLength) return fail('An ITS ID has ' + CFG.itsIdLength + ' digits.');
+        if (CFG.itsIdLength) {
+          const digits = core.digits(id);
+          if (digits.length !== CFG.itsIdLength) return fail('An ITS ID has ' + CFG.itsIdLength + ' digits.');
+        }
         if (CFG.allowOnlyKnownIds && !indexOf(state.published).teachers.has(id)) return fail('This ITS ID is not in the published jadwal.');
         signIn({ role: 'user', its: id });
       }
@@ -150,6 +153,8 @@
       state.loadError ? notice('warn', state.loadError) : null
     );
   }
+
+  function clean(v) { return v == null ? '' : String(v).replace(/\s+/g, ' ').trim(); }
 
   /* ======================================================================
      JADWAL (shared by users and admin)
@@ -295,7 +300,7 @@
         const c = idx.classes.get(core.norm(q));
         if (c) return open(c.key);
         const qk = core.norm(q);
-        state.lookupMsg = 'No class named “' + q + '” was found.';
+        state.lookupMsg = 'No class named "' + q + '" was found.';
         state.lookupSuggest = qk ? idx.classList.filter((x) => x.key.includes(qk) || qk.includes(x.key)).slice(0, 6) : [];
         render();
       }
@@ -328,7 +333,7 @@
     const out = h('div', { class: 'view' });
     page.append(out);
     if (state.view) showJadwal(out, idx, state.view, 'Published ' + fmtStamp(ds.updatedAt));
-    else out.append(emptyState('No teaching jadwal is linked to ITS ' + its, 'Type a class name above to see that class’s jadwal.'));
+    else out.append(emptyState('No teaching jadwal is linked to ITS ' + its, 'Type a class name above to see that class's jadwal.'));
     return page;
   }
 
@@ -386,8 +391,8 @@
     const branch = CFG.github.branch;
     const explain = (res) => {
       if (res.status === 401) return 'GitHub rejected the token. Create a new token and paste it again.';
-      if (res.status === 403) return 'The token is not allowed to change this repository. Give it “Contents: Read and write” access to it.';
-      if (res.status === 404) return 'The repository “' + owner + '/' + repo + '” was not found, or the token cannot see it. Check both names and the token’s repository access.';
+      if (res.status === 403) return 'The token is not allowed to change this repository. Give it "Contents: Read and write" access to it.';
+      if (res.status === 404) return 'The repository "' + owner + '/' + repo + '" was not found, or the token cannot see it. Check both names and the token's repository access.';
       if (res.status === 409 || res.status === 422) return 'GitHub reported a conflict. Press Publish again.';
       return 'GitHub answered with error ' + res.status + '.';
     };
@@ -488,7 +493,7 @@
           h('div', { class: 'field' }, h('label', { for: 'gh-owner' }, 'GitHub owner'), owner),
           h('div', { class: 'field' }, h('label', { for: 'gh-repo' }, 'Repository'), repoIn),
           h('div', { class: 'field wide' }, h('label', { for: 'gh-token' }, 'Access token'), token,
-            h('span', { class: 'hint' }, 'Kept only until this tab closes. Create a fine-grained token for this one repository with “Contents: Read and write”.'))),
+            h('span', { class: 'hint' }, 'Kept only until this tab closes. Create a fine-grained token for this one repository with "Contents: Read and write".'))),
         h('div', { class: 'row-actions' }, pubBtn,
           h('button', { class: 'btn', type: 'button', disabled: !hasDraft, onclick: () => downloadJson(state.draft) }, 'Download jadwal.json')),
         msg,
